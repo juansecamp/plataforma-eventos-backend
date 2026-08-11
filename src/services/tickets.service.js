@@ -1,10 +1,9 @@
-import Ticket from '../models/ticket.model.js'
+import ticketRepository from '../repositories/ticket.repository.js'
 
 export const obtenerTodosLosTickets = async () => {
-return await Ticket.find()
+  return await ticketRepository.getAllTickets()
 }
 
 export const guardarNuevoTicket = async (ticketData) => {
-const nuevoTicket = new Ticket(ticketData)
-return await nuevoTicket.save()
+  return await ticketRepository.createTicket(ticketData)
 }
