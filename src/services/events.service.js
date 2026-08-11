@@ -1,10 +1,9 @@
-import Evento from '../models/event.model.js'
+import eventRepository from '../repositories/event.repository.js'
 
 export const obtenerTodosLosEventos = async () => {
-return await Evento.find()
+  return await eventRepository.getAllEvents()
 }
 
 export const guardarNuevoEvento = async (eventData) => {
-const nuevoEvento = new Evento(eventData)
-return await nuevoEvento.save()
+  return await eventRepository.createEvent(eventData)
 }
