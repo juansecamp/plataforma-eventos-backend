@@ -21,7 +21,7 @@ Plataforma de eventos: permite el registro de usuarios (con roles `USER`, `ORGAN
 
 1. Clonar el repositorio:
 ```bash
-git clone <url-del-repositorio>
+git clone https://github.com/juansecamp/plataforma-eventos-backend.git
 ```
 
 2. Instalar las dependencias:
