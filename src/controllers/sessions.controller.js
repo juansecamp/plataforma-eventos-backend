@@ -24,12 +24,10 @@ export const loginSession = async (req, res) => {
 
 export const registerSession = async (req, res) => {
   try {
-    await registrarUsuario(req.body)
-    res.status(201).json({ message: 'Usuario registrado exitosamente en la sesión' })
+    const nuevoUsuario = await registrarUsuario(req.body)
+    res.status(201).json({ status: 'success', payload: nuevoUsuario })
   } catch (error) {
-    if (error.message === 'El usuario ya existe') {
-      return res.status(400).json({ error: error.message })
-    }
-    res.status(500).json({ error: 'Error en el registro de sesión', detalle: error.message })
+    const status = error.status || 500
+    res.status(status).json({ status: 'error', message: error.message })
   }
 }

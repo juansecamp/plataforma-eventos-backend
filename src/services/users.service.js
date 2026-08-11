@@ -1,4 +1,4 @@
-import userRepository from '../repositories/user.repository.js'
+import userRepository from '../repositories/users.repository.js'
 import { hashPassword } from '../utils/hash.js'
 
 export const obtenerTodosLosUsuarios = async () => {
