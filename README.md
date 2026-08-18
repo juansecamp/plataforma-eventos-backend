@@ -1,6 +1,9 @@
+Dale, acá tenés el README completo y actualizado, con todo lo de esta entrega incorporado. Reemplazá todo el contenido del archivo por esto:
+
+markdown
 # Plataforma de Eventos e Inscripciones
 
-Backend desarrollado con Node.js, Express y MongoDB para una plataforma de gestión de eventos e inscripciones. Proyecto correspondiente a la materia Backend II - Diseño y Arquitectura Backend, implementando una arquitectura modular por capas (rutas, controladores, servicios, modelos, middlewares) con autenticación JWT y control de acceso por roles.
+Backend desarrollado con Node.js, Express y MongoDB para una plataforma de gestión de eventos e inscripciones. Proyecto correspondiente a la materia Backend II - Diseño y Arquitectura Backend, implementando una arquitectura modular por capas (rutas, controladores, servicios, repositorios, DAO, modelos, middlewares) con autenticación JWT (por header y por cookie) y control de acceso por roles.
 
 ## Temática
 
@@ -14,6 +17,7 @@ Plataforma de eventos: permite el registro de usuarios (con roles `user`, `organ
 - **Mongoose** - ODM para MongoDB
 - **jsonwebtoken** - Generación y verificación de tokens JWT
 - **bcrypt** - Hasheo de contraseñas
+- **cookie-parser** - Lectura de cookies en las peticiones
 - **dotenv** - Gestión de variables de entorno
 - **nodemon** - Reinicio automático del servidor en desarrollo
 
@@ -44,6 +48,7 @@ cp .env.example .env
 | `NODE_ENV` | Entorno de ejecución (`development` / `production`) |
 | `MONGO_URL` | String de conexión a tu base de datos MongoDB Atlas |
 | `JWT_SECRET` | Clave secreta para firmar los tokens JWT |
+| `JWT_EXPIRES_IN` | Tiempo de expiración del token (ej: `1h`) |
 
 ## Uso
 
@@ -56,6 +61,7 @@ npm run dev
 El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), levantando `server.js`, que a su vez utiliza la configuración de Express definida en `app.js`.
 
 ## Estructura del Proyecto
+
 .
 ├── src/
 │ ├── config/ # Configuración (conexión a la base de datos)
@@ -89,8 +95,12 @@ El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), lev
 
 ### Sesiones (Autenticación)
 
-- `POST /api/sessions/register` - Registrar un nuevo usuario (ver detalle abajo)
-- `POST /api/sessions/login` - Iniciar sesión y obtener un token JWT
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/sessions/register` | Registrar un nuevo usuario |
+| POST | `/api/sessions/login` | Iniciar sesión (setea cookie `currentUser` con el JWT) |
+| GET | `/api/sessions/current` | Devuelve el usuario autenticado (requiere cookie válida) |
+| POST | `/api/sessions/logout` | Cierra sesión (elimina la cookie `currentUser`) |
 
 ### Eventos
 
@@ -130,7 +140,7 @@ El campo `role` **no se puede enviar desde el body**: todos los usuarios se regi
 
 ### Respuestas posibles
 
-**201 Created** — registro exitoso (nótese el email normalizado y la ausencia del campo `password`):
+**201 Created** — registro exitoso (email normalizado, sin `password`):
 ```json
 {
   "status": "success",
@@ -160,18 +170,96 @@ El campo `role` **no se puede enviar desde el body**: todos los usuarios se regi
 }
 ```
 
-### Cómo probarlo
+## Login (`POST /api/sessions/login`)
+
+Valida las credenciales del usuario y, si son correctas, genera un JWT que se guarda en una cookie `currentUser` (httpOnly).
+
+### Ejemplo de request
+
+```json
+{
+  "email": "ana@mail.com",
+  "password": "Secreta123"
+}
+```
+
+### Respuestas posibles
+
+**200 OK** — login correcto (además setea la cookie `currentUser`, httpOnly, `sameSite: lax`, expiración de 1 hora):
+```json
+{
+  "status": "success",
+  "message": "Login correcto"
+}
+```
+
+**401 Unauthorized** — credenciales incorrectas (mensaje genérico, no se especifica si falló el email o la contraseña):
+```json
+{
+  "status": "error",
+  "message": "Credenciales inválidas"
+}
+```
+
+## Usuario autenticado (`GET /api/sessions/current`)
+
+Ruta protegida por el middleware `auth`, que lee la cookie `currentUser`, verifica el JWT y expone el payload en `req.user`.
+
+### Respuestas posibles
+
+**200 OK** — token válido:
+```json
+{
+  "status": "success",
+  "payload": {
+    "id": "665f2a...",
+    "email": "ana@mail.com",
+    "role": "user"
+  }
+}
+```
+
+**401 Unauthorized** — no hay cookie, o el token es inválido/expirado:
+```json
+{
+  "status": "error",
+  "message": "No autenticado"
+}
+```
+
+## Logout (`POST /api/sessions/logout`)
+
+Elimina la cookie `currentUser`.
+
+### Respuesta
+
+**200 OK**:
+```json
+{
+  "status": "success",
+  "message": "Sesión cerrada"
+}
+```
+
+### Cómo probar el flujo completo
 
 1. Levantar el servidor con `npm run dev`.
-2. Enviar un `POST` a `http://localhost:8080/api/sessions/register` con Postman, Thunder Client o similar, incluyendo el body JSON de ejemplo de arriba.
-3. Verificar en MongoDB que la contraseña se guarda hasheada (con formato `$2b$10$...`), nunca en texto plano.
-4. Verificar que la respuesta del endpoint nunca incluye el campo `password`.
+2. `POST /api/sessions/register` con los datos de un usuario nuevo.
+3. `POST /api/sessions/login` con ese mismo email y contraseña (Postman/Thunder Client guarda la cookie automáticamente).
+4. `GET /api/sessions/current` → debería devolver `200` con los datos del usuario.
+5. `POST /api/sessions/logout` → elimina la cookie.
+6. `GET /api/sessions/current` de nuevo → debería devolver `401`.
+7. Verificar en MongoDB que la contraseña se guarda hasheada (formato `$2b$10$...`), nunca en texto plano.
+8. Verificar que ninguna respuesta incluye el campo `password`.
 
 ## Autenticación
 
-Las rutas protegidas requieren un token JWT enviado en el header:
+El proyecto usa dos mecanismos de autenticación, según la ruta:
+
+- **Rutas de `users`, `events` y `tickets`**: protegidas por el middleware `handlePolicies`, que exige un JWT enviado por header:
 
 Authorization: Bearer <token>
 
+Ese token se obtiene haciendo login en `POST /api/sessions/login` (mismo JWT que se guarda en la cookie), y `handlePolicies` valida que el `role` incluido en el token tenga permiso para la ruta solicitada.
 
-El token se obtiene haciendo login en `POST /api/sessions/login`, y contiene el rol del usuario, que es validado por el middleware `handlePolicies` según los permisos de cada ruta.
+- **Ruta `GET /api/sessions/current`**: protegida por el middleware `auth`, que en cambio lee el JWT desde la cookie `currentUser` (no desde el header), pensada para el flujo típico de sesión de un usuario logueado en un navegador.
