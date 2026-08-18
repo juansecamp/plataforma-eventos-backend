@@ -6,7 +6,11 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 6
 
 export const loginUsuario = async (email, password) => {
-  const usuario = await userRepository.getUserByEmail(email)
+  if (!email || !password) {
+    return null
+  }
+
+  const usuario = await userRepository.getUserByEmail(email.trim().toLowerCase())
   if (!usuario) {
     return null
   }
@@ -16,7 +20,11 @@ export const loginUsuario = async (email, password) => {
     return null
   }
 
-  const token = generateToken({ id: usuario._id, role: usuario.role })
+  const token = generateToken({
+    id: usuario._id,
+    email: usuario.email,
+    role: usuario.role
+  })
 
   return { usuario, token }
 }
@@ -53,8 +61,6 @@ export const registrarUsuario = async (userData) => {
 
   const passwordHasheada = await hashPassword(password)
 
-  // Ojo: NO se toma "role" del body. Solo estos 4 campos.
-  // El modelo asigna "user" por defecto, sin importar qué mande el cliente.
   const nuevoUsuario = await userRepository.createUser({
     first_name,
     last_name,

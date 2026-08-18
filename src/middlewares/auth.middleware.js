@@ -1,5 +1,21 @@
 import { verifyToken } from '../utils/jwt.js'
 
+export const auth = (req, res, next) => {
+  const token = req.cookies?.currentUser
+
+  if (!token) {
+    return res.status(401).json({ status: 'error', message: 'No autenticado' })
+  }
+
+  try {
+    const payload = verifyToken(token)
+    req.user = payload
+    next()
+  } catch (error) {
+    return res.status(401).json({ status: 'error', message: 'No autenticado' })
+  }
+}
+
 export const handlePolicies = (rolesPermitidos) => {
   return (req, res, next) => {
     const authHeader = req.headers['authorization']
@@ -8,7 +24,7 @@ export const handlePolicies = (rolesPermitidos) => {
       return res.status(401).json({ error: 'No autorizado', detalle: 'Debe enviar un token en el header Authorization' })
     }
 
-    const token = authHeader.split(' ')[1] // formato: "Bearer <token>"
+    const token = authHeader.split(' ')[1]
 
     if (!token) {
       return res.status(401).json({ error: 'No autorizado', detalle: 'Formato de token inválido' })
@@ -23,11 +39,10 @@ export const handlePolicies = (rolesPermitidos) => {
 
     const userRole = payload.role
 
-    if (!rolesPermitidos.includes(userRole?.toUpperCase())) {
+    if (!rolesPermitidos.includes(userRole?.toLowerCase())) {
       return res.status(403).json({ error: 'Prohibido', detalle: 'No tienes los privilegios necesarios para realizar esta acción' })
     }
 
-    // Guardamos el usuario decodificado por si el controller lo necesita
     req.usuario = payload
 
     next()
