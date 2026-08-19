@@ -1,32 +1,47 @@
-import { loginUsuario, registrarUsuario } from '../services/sessions.service.js'
+import passport from 'passport'
+import { generateToken } from '../utils/jwt.js'
 
 const COOKIE_MAX_AGE = 3600000 // 1 hora en milisegundos
 
-export const registerSession = async (req, res) => {
-  try {
-    const nuevoUsuario = await registrarUsuario(req.body)
-    res.status(201).json({ status: 'success', payload: nuevoUsuario })
-  } catch (error) {
-    const status = error.status || 500
-    res.status(status).json({ status: 'error', message: error.message })
-  }
+export const registerSession = (req, res, next) => {
+  passport.authenticate('register', { session: false }, (error, usuario, info) => {
+    if (error) {
+      return res.status(500).json({ status: 'error', message: 'Error en el registro' })
+    }
+
+    if (!usuario) {
+      const status = info?.status || 400
+      return res.status(status).json({ status: 'error', message: info?.message || 'No se pudo registrar el usuario' })
+    }
+
+    res.status(201).json({
+      status: 'success',
+      payload: {
+        id: usuario._id,
+        first_name: usuario.first_name,
+        last_name: usuario.last_name,
+        email: usuario.email,
+        role: usuario.role
+      }
+    })
+  })(req, res, next)
 }
 
-export const loginSession = async (req, res) => {
-  try {
-    const { email, password } = req.body
+export const loginSession = (req, res, next) => {
+  passport.authenticate('login', { session: false }, (error, usuario, info) => {
+    if (error) {
+      return res.status(500).json({ status: 'error', message: 'Error en el inicio de sesión' })
+    }
 
-    if (!email || !password) {
+    if (!usuario) {
       return res.status(401).json({ status: 'error', message: 'Credenciales inválidas' })
     }
 
-    const resultado = await loginUsuario(email, password)
-
-    if (!resultado) {
-      return res.status(401).json({ status: 'error', message: 'Credenciales inválidas' })
-    }
-
-    const { token } = resultado
+    const token = generateToken({
+      id: usuario._id,
+      email: usuario.email,
+      role: usuario.role
+    })
 
     res.cookie('currentUser', token, {
       httpOnly: true,
@@ -36,9 +51,7 @@ export const loginSession = async (req, res) => {
     })
 
     res.status(200).json({ status: 'success', message: 'Login correcto' })
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: 'Error en el inicio de sesión' })
-  }
+  })(req, res, next)
 }
 
 export const currentSession = (req, res) => {
