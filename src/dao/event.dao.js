@@ -13,6 +13,10 @@ class EventDAO {
     const nuevoEvento = new Evento(eventData)
     return await nuevoEvento.save()
   }
+
+  async update(id, updateData) {
+    return await Evento.findByIdAndUpdate(id, updateData, { new: true })
+  }
 }
 
 export default new EventDAO()

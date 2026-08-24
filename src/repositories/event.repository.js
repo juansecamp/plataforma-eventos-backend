@@ -12,6 +12,10 @@ class EventRepository {
   async createEvent(eventData) {
     return await eventDAO.create(eventData)
   }
+
+  async updateEvent(id, updateData) {
+    return await eventDAO.update(id, updateData)
+  }
 }
 
 export default new EventRepository()

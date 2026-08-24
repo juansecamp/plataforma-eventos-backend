@@ -1,13 +1,14 @@
 import { Router } from 'express'
 import { getUsers, createUser } from '../controllers/users.controller.js'
-import { handlePolicies } from '../middlewares/auth.middleware.js'
+import { auth } from '../middlewares/auth.middleware.js'
+import { authorize } from '../middlewares/authorize.middleware.js'
 
 const router = Router()
 
 // Ver todos los usuarios: Únicamente el admin con privilegios totales
-router.get('/', handlePolicies(['admin']), getUsers)
+router.get('/', auth, authorize(['admin']), getUsers)
 
-// Registrar un usuario: Permitido para todos los roles (cualquier visitante de la app)
-router.post('/', handlePolicies(['user', 'organizer', 'admin']), createUser)
+// Registrar un usuario: dejamos esta ruta pública (el registro real pasa por /api/sessions/register)
+router.post('/', createUser)
 
 export default router
