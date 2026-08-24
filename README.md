@@ -1,9 +1,6 @@
-Dale, acá tenés el README completo y actualizado. Reemplazá todo el contenido del archivo por esto:
-
-markdown
 # Plataforma de Eventos e Inscripciones
 
-Backend desarrollado con Node.js, Express y MongoDB para una plataforma de gestión de eventos e inscripciones. Proyecto correspondiente a la materia Backend II - Diseño y Arquitectura Backend, implementando una arquitectura modular por capas (rutas, controladores, servicios, repositorios, DAO, modelos, middlewares) con autenticación centralizada mediante Passport.js, JWT y cookies HTTP Only, además de control de acceso por roles.
+Backend desarrollado con Node.js, Express y MongoDB para una plataforma de gestión de eventos e inscripciones. Proyecto correspondiente a la materia Backend II - Diseño y Arquitectura Backend, implementando una arquitectura modular por capas (rutas, controladores, servicios, repositorios, DAO, modelos, middlewares) con autenticación centralizada mediante Passport.js, JWT y cookies HTTP Only, además de un sistema de autorización por roles.
 
 ## Temática
 
@@ -73,7 +70,7 @@ El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), lev
 │ ├── repositories/ # Capa de acceso a datos
 │ ├── dao/ # Data Access Objects
 │ ├── models/ # Modelos de Mongoose
-│ ├── middlewares/ # Middlewares personalizados (autorización por roles)
+│ ├── middlewares/ # auth (autenticación) y authorize (autorización por roles)
 │ ├── routes/ # Definición de rutas de la API
 │ └── utils/ # Utilidades (hash de contraseñas, JWT)
 ├── .env # Variables de entorno (no versionado)
@@ -93,8 +90,8 @@ El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), lev
 
 ### Usuarios
 
-- `GET /api/users` - Listar usuarios (rol requerido: `admin`)
-- `POST /api/users` - Registrar un nuevo usuario (roles: `user`, `organizer`, `admin`)
+- `GET /api/users` - Listar usuarios, sin exponer contraseñas (rol requerido: `admin`)
+- `POST /api/users` - Registrar un nuevo usuario (ruta pública, sin autenticación)
 
 ### Sesiones (Autenticación)
 
@@ -107,17 +104,18 @@ El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), lev
 
 ### Eventos
 
-- `GET /api/events` - Listar eventos (roles: `user`, `organizer`, `admin`)
+- `GET /api/events` - Listar eventos (cualquier usuario autenticado)
 - `POST /api/events` - Crear un nuevo evento (roles: `organizer`, `admin`)
+- `PUT /api/events/:id` - Modificar un evento (roles: `organizer` solo el suyo, `admin` cualquiera)
 
 ### Tickets
 
 - `GET /api/tickets` - Listar tickets (rol requerido: `admin`)
-- `POST /api/tickets` - Crear/comprar un ticket (roles: `user`, `organizer`, `admin`)
+- `POST /api/tickets` - Crear/comprar un ticket (cualquier usuario autenticado)
 
 ## Autenticación centralizada con Passport.js
 
-El sistema de autenticación fue refactorizado para centralizar su lógica en estrategias de [Passport.js](http://www.passportjs.org/), definidas en `src/config/passport.config.js`. El comportamiento de la API hacia afuera no cambia respecto de la entrega anterior — solo mejora la organización interna del código.
+El sistema de autenticación fue refactorizado para centralizar su lógica en estrategias de [Passport.js](http://www.passportjs.org/), definidas en `src/config/passport.config.js`.
 
 ### Estrategias implementadas
 
@@ -132,6 +130,53 @@ El sistema de autenticación fue refactorizado para centralizar su lógica en es
 ### Preparado para providers externos
 
 `passport.config.js` está organizado para que agregar nuevas estrategias (por ejemplo, login con Google o GitHub) sea tan simple como sumar un nuevo bloque `passport.use('nombre-estrategia', new Strategy(...))` dentro de `initializePassport()`, sin necesidad de tocar `app.js` ni el resto de la aplicación.
+
+## Roles y autorización
+
+El sistema separa claramente dos responsabilidades mediante dos middlewares reutilizables:
+
+- **`auth`** (`src/middlewares/auth.middleware.js`): valida que exista una sesión activa. Lee el JWT desde la cookie `currentUser`, lo verifica, y guarda el payload en `req.user`. Si no hay cookie o el token es inválido/expirado, responde **401 (No autenticado)**.
+- **`authorize`** (`src/middlewares/authorize.middleware.js`): valida que el usuario autenticado tenga el rol necesario para la acción. Recibe como parámetro un array de roles permitidos y lo compara contra `req.user.role`. Si el rol no está permitido, responde **403 (Sin permisos)**.
+
+Ambos middlewares se usan siempre en conjunto y en ese orden en las rutas protegidas: primero `auth` (¿quién sos?), después `authorize` (¿qué podés hacer?).
+
+### Diferencia entre 401 y 403
+
+| Código | Significado | Cuándo ocurre |
+|---|---|---|
+| `401 Unauthorized` | No autenticado | No hay cookie de sesión, o el token es inválido/expirado |
+| `403 Forbidden` | Sin permisos | Hay sesión válida, pero el rol del usuario no puede realizar esa acción |
+
+### Matriz de permisos
+
+| Acción | `user` | `organizer` | `admin` |
+|---|---|---|---|
+| Consultar eventos publicados | ✅ | ✅ | ✅ |
+| Crear eventos | ❌ | ✅ | ✅ |
+| Modificar/cancelar eventos propios | ❌ | ✅ | ✅ |
+| Modificar cualquier evento | ❌ | ❌ | ✅ |
+| Ver todos los usuarios | ❌ | ❌ | ✅ |
+| Crear/comprar tickets | ✅ | ✅ | ✅ |
+
+### Rutas protegidas
+
+| Ruta | Middlewares | Roles permitidos |
+|---|---|---|
+| `GET /api/sessions/current` | Estrategia `current` de Passport | Cualquier usuario autenticado |
+| `GET /api/events` | `auth` | Cualquier usuario autenticado |
+| `POST /api/events` | `auth`, `authorize` | `organizer`, `admin` |
+| `PUT /api/events/:id` | `auth`, `authorize` + validación de propiedad en el service | `organizer` (solo eventos propios), `admin` (cualquiera) |
+| `GET /api/users` | `auth`, `authorize` | `admin` |
+| `GET /api/tickets` | `auth`, `authorize` | `admin` |
+| `POST /api/tickets` | `auth` | Cualquier usuario autenticado |
+
+### Propiedad de recursos
+
+Un `organizer` solo puede modificar (`PUT /api/events/:id`) los eventos que él mismo creó. Esta validación no vive en el middleware (que solo verifica el rol), sino en `events.service.js`: se compara el campo `organizer` del evento contra el `id` del usuario autenticado. Si no coinciden, y el usuario tampoco es `admin`, se responde `403`.
+
+### Roles y registro
+
+El campo `role` del modelo `User` acepta los valores `user`, `organizer` y `admin`, con `user` como valor por defecto. El endpoint público `POST /api/sessions/register` **no permite** especificar el rol desde el body — todo usuario nuevo se crea siempre como `user`. La asignación de roles `organizer` o `admin` es una operación administrativa (por ahora, manual en la base de datos), no autoservicio.
 
 ## Registro de usuarios (`POST /api/sessions/register`)
 
@@ -175,21 +220,9 @@ El campo `role` **no se puede enviar desde el body**: todos los usuarios se regi
 }
 ```
 
-**400 Bad Request** — campos faltantes, email con formato inválido, o contraseña de menos de 6 caracteres:
-```json
-{
-  "status": "error",
-  "message": "Faltan campos obligatorios"
-}
-```
+**400 Bad Request** — campos faltantes, email con formato inválido, o contraseña de menos de 6 caracteres.
 
-**409 Conflict** — el email ya está registrado:
-```json
-{
-  "status": "error",
-  "message": "El email ya está registrado"
-}
-```
+**409 Conflict** — el email ya está registrado.
 
 ## Login (`POST /api/sessions/login`)
 
@@ -206,7 +239,7 @@ Valida las credenciales del usuario y, si son correctas, genera un JWT que se gu
 
 ### Respuestas posibles
 
-**200 OK** — login correcto (además setea la cookie `currentUser`, httpOnly, `sameSite: lax`, expiración de 1 hora):
+**200 OK** — login correcto (además setea la cookie `currentUser`, httpOnly, `sameSite: lax`, expiración configurable):
 ```json
 {
   "status": "success",
@@ -226,9 +259,7 @@ Valida las credenciales del usuario y, si son correctas, genera un JWT que se gu
 
 Ruta protegida por la estrategia `current` de Passport, que lee la cookie `currentUser`, verifica el JWT y expone el payload en `req.user`.
 
-### Respuestas posibles
-
-**200 OK** — token válido:
+**200 OK**:
 ```json
 {
   "status": "success",
@@ -246,8 +277,6 @@ Ruta protegida por la estrategia `current` de Passport, que lee la cookie `curre
 
 Elimina la cookie `currentUser`. No requiere pasar por Passport.
 
-### Respuesta
-
 **200 OK**:
 ```json
 {
@@ -256,25 +285,59 @@ Elimina la cookie `currentUser`. No requiere pasar por Passport.
 }
 ```
 
-### Cómo probar el flujo completo
+## Eventos: crear y modificar
+
+### `POST /api/events` (roles: `organizer`, `admin`)
+
+```json
+{
+  "title": "Congreso Tech 2026",
+  "description": "Un evento de tecnología"
+}
+```
+
+**201 Created**:
+```json
+{
+  "status": "success",
+  "payload": {
+    "id": "6690...",
+    "title": "Congreso Tech 2026",
+    "organizer": "665f2a..."
+  }
+}
+```
+
+**403 Forbidden** (rol `user`):
+```json
+{
+  "status": "error",
+  "message": "No tenés permisos para realizar esta acción"
+}
+```
+
+### `PUT /api/events/:id` (roles: `organizer` solo el suyo, `admin` cualquiera)
+
+**200 OK** si el usuario es el dueño del evento o es `admin`.
+
+**403 Forbidden** si un `organizer` intenta modificar un evento que no le pertenece:
+```json
+{
+  "status": "error",
+  "message": "No podés modificar un evento que no te pertenece"
+}
+```
+
+## Cómo probar el flujo completo
 
 1. Levantar el servidor con `npm run dev`.
-2. `POST /api/sessions/register` con los datos de un usuario nuevo.
-3. `POST /api/sessions/login` con ese mismo email y contraseña (Postman/Thunder Client guarda la cookie automáticamente).
-4. `GET /api/sessions/current` → debería devolver `200` con los datos del usuario.
-5. `POST /api/sessions/logout` → elimina la cookie.
-6. `GET /api/sessions/current` de nuevo → debería devolver `401`.
-7. Verificar en MongoDB que la contraseña se guarda hasheada (formato `$2b$10$...`), nunca en texto plano.
-8. Verificar que ninguna respuesta incluye el campo `password`.
-
-## Autorización por roles
-
-El proyecto usa dos mecanismos de autenticación/autorización, según la ruta:
-
-- **Rutas de `users`, `events` y `tickets`**: protegidas por el middleware `handlePolicies`, que exige un JWT enviado por header:
-
-Authorization: Bearer <token>
-
-Ese token se obtiene haciendo login en `POST /api/sessions/login` (mismo JWT que se guarda en la cookie), y `handlePolicies` valida que el `role` incluido en el token tenga permiso para la ruta solicitada.
-
-- **Ruta `GET /api/sessions/current`**: protegida por la estrategia `current` de Passport, que en cambio lee el JWT desde la cookie `currentUser` (no desde el header), pensada para el flujo típico de sesión de un usuario logueado en un navegador.
+2. Registrar un usuario (`POST /api/sessions/register`) → queda con rol `user`.
+3. (Opcional, para probar roles) cambiar manualmente el rol a `organizer` o `admin` en MongoDB.
+4. Hacer login (`POST /api/sessions/login`) → se guarda la cookie `currentUser`.
+5. `GET /api/sessions/current` → debería devolver `200` con los datos del usuario.
+6. Probar `POST /api/events` con distintos roles y confirmar 201/403 según corresponda.
+7. Crear un evento con un `organizer`, y probar `PUT /api/events/:id` con otro `organizer` distinto (403) y con un `admin` (200).
+8. `POST /api/sessions/logout` → elimina la cookie.
+9. `GET /api/sessions/current` de nuevo → debería devolver `401`.
+10. Verificar en MongoDB que la contraseña se guarda hasheada, nunca en texto plano.
+11. Verificar que ninguna respuesta (incluyendo `GET /api/users`) incluye el campo `password`.
