@@ -1,17 +1,21 @@
 import { Router } from 'express'
-import { getEvents, createEvent, updateEvent } from '../controllers/events.controller.js'
+import { getEvents, getEventById, createEvent, updateEvent, updateEventStatus } from '../controllers/events.controller.js'
 import { auth } from '../middlewares/auth.middleware.js'
 import { authorize } from '../middlewares/authorize.middleware.js'
 
 const router = Router()
 
-// Cualquier usuario autenticado puede ver la lista de eventos
-router.get('/', auth, getEvents)
+// Público: cualquiera puede ver la lista y el detalle de eventos
+router.get('/', getEvents)
+router.get('/:id', getEventById)
 
 // SOLO un organizer o un admin pueden publicar nuevos eventos
 router.post('/', auth, authorize(['organizer', 'admin']), createEvent)
 
-// Modificar un evento: organizer solo el suyo, admin cualquiera (se valida dentro del service)
+// Modificar un evento: organizer solo el suyo, admin cualquiera (se valida en el service)
 router.put('/:id', auth, authorize(['organizer', 'admin']), updateEvent)
+
+// Cambiar el estado de un evento (ej: cancelarlo)
+router.patch('/:id/status', auth, authorize(['organizer', 'admin']), updateEventStatus)
 
 export default router

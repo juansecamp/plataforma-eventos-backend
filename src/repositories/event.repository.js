@@ -1,8 +1,12 @@
 import eventDAO from '../dao/event.dao.js'
 
 class EventRepository {
-  async getAllEvents() {
-    return await eventDAO.findAll()
+  async getEvents(filter, options) {
+    return await eventDAO.findAll(filter, options)
+  }
+
+  async countEvents(filter) {
+    return await eventDAO.countAll(filter)
   }
 
   async getEventById(id) {
