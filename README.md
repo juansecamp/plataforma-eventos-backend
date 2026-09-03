@@ -21,6 +21,7 @@ Plataforma de eventos: permite el registro de usuarios (con roles `user`, `organ
 - **passport** - Framework de autenticación con estrategias
 - **passport-local** - Estrategia de autenticación con email/password
 - **passport-jwt** - Estrategia de autenticación con JWT
+- **nodemailer** - Envío de emails (notificaciones de inscripción)
 - **dotenv** - Gestión de variables de entorno
 - **nodemon** - Reinicio automático del servidor en desarrollo
 
@@ -52,6 +53,11 @@ cp .env.example .env
 | `MONGO_URL` | String de conexión a tu base de datos MongoDB Atlas |
 | `JWT_SECRET` | Clave secreta para firmar los tokens JWT |
 | `JWT_EXPIRES_IN` | Tiempo de expiración del token (ej: `1h`) |
+| `MAIL_HOST` | Host del servidor SMTP (ej: `smtp.ethereal.email`) |
+| `MAIL_PORT` | Puerto del servidor SMTP (ej: `587`) |
+| `MAIL_USER` | Usuario para autenticarse en el servidor SMTP |
+| `MAIL_PASS` | Contraseña para autenticarse en el servidor SMTP |
+| `MAIL_FROM` | Dirección de email que figura como remitente |
 
 ## Uso
 
@@ -117,8 +123,12 @@ El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), lev
 
 ### Tickets
 
-- `GET /api/tickets` - Listar tickets (rol requerido: `admin`)
-- `POST /api/tickets` - Crear/comprar un ticket (cualquier usuario autenticado)
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| POST | `/api/events/:eid/tickets` | Autenticado | Inscribirse a un evento |
+| GET | `/api/tickets/my-tickets` | Autenticado | Ver los propios tickets |
+| GET | `/api/events/:eid/tickets` | Organizador dueño, o `admin` | Ver tickets de un evento |
+| PATCH | `/api/tickets/:tid/cancel` | Dueño del ticket, o `admin` | Cancelar una inscripción |
 
 ## Autenticación centralizada con Passport.js
 
@@ -399,3 +409,109 @@ Request:
 12. `GET /api/sessions/current` de nuevo → debería devolver `401`.
 13. Verificar en MongoDB que la contraseña se guarda hasheada, nunca en texto plano.
 14. Verificar que ninguna respuesta incluye el campo `password`.
+
+## Tickets e Inscripciones
+
+El modelo `Ticket` relaciona un usuario con un evento mediante referencias (nunca objetos embebidos). Campos:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `user` | ObjectId (ref `User`) | Usuario que se inscribió |
+| `event` | ObjectId (ref `Event`) | Evento al que se inscribió |
+| `status` | string | `confirmed` (default), `pending`, `cancelled` |
+| `quantity` | number | Cantidad de entradas, debe ser mayor a 0 |
+| `reservationCode` | string | Código único generado automáticamente al confirmar la inscripción |
+| `cancelledAt` | Date | Se completa al cancelar; `null` mientras el ticket está activo |
+
+### Endpoints
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| POST | `/api/events/:eid/tickets` | Autenticado | Inscribirse a un evento |
+| GET | `/api/tickets/my-tickets` | Autenticado | Ver los propios tickets (con datos del evento vía `populate`) |
+| GET | `/api/events/:eid/tickets` | Organizador dueño del evento, o `admin` | Ver todos los tickets de un evento |
+| PATCH | `/api/tickets/:tid/cancel` | Dueño del ticket, o `admin` | Cancelar una inscripción |
+
+### Reglas de negocio (en `tickets.service.js`)
+
+Al inscribirse (`POST /api/events/:eid/tickets`):
+- El evento debe existir (`404` si no).
+- El evento debe estar en estado `published` (rechaza `draft`, `cancelled`, `finished`).
+- `quantity` debe ser un número entero mayor a 0.
+- El usuario no puede tener ya un ticket **activo** (no cancelado) para ese mismo evento.
+- Los cupos disponibles se calculan como `capacity - (suma de quantity de tickets activos)`; los tickets `cancelled` **no** ocupan cupo.
+- Si `quantity` supera el cupo disponible, se rechaza con un mensaje indicando cuántos cupos quedan.
+
+Al cancelar (`PATCH /api/tickets/:tid/cancel`):
+- El ticket debe existir (`404` si no).
+- Solo puede cancelarlo su dueño o un `admin` (`403` en caso contrario).
+- No se puede cancelar un ticket ya `cancelled`.
+- Cancelar **no elimina** el documento: cambia `status` a `cancelled` y completa `cancelledAt`. El cupo queda liberado automáticamente, porque el cálculo de cupos solo cuenta tickets activos.
+
+### Notificaciones por email
+
+Al confirmarse una inscripción, se envía un email de confirmación usando [Nodemailer](https://nodemailer.com/), con el código de reserva y la cantidad de entradas. Las credenciales del servidor SMTP se configuran por variables de entorno (nunca hardcodeadas):
+
+| Variable | Descripción |
+|---|---|
+| `MAIL_HOST` | Host del servidor SMTP |
+| `MAIL_PORT` | Puerto del servidor SMTP |
+| `MAIL_USER` | Usuario para autenticarse |
+| `MAIL_PASS` | Contraseña para autenticarse |
+| `MAIL_FROM` | Dirección que figura como remitente |
+
+Si el envío del email falla por cualquier motivo, el error se loguea en el servidor pero **no** impide que la inscripción se confirme (el ticket ya quedó guardado en la base de datos).
+
+### Ejemplo: inscripción exitosa
+
+Request (`POST /api/events/:eid/tickets`):
+```json
+{
+  "quantity": 2
+}
+```
+
+**201 Created**:
+```json
+{
+  "status": "success",
+  "payload": {
+    "user": "665f2a...",
+    "event": "6690...",
+    "status": "confirmed",
+    "quantity": 2,
+    "reservationCode": "TCK-3RVGMTOD",
+    "cancelledAt": null
+  }
+}
+```
+
+### Ejemplo: sin cupo suficiente
+
+**400 Bad Request**:
+```json
+{
+  "status": "error",
+  "message": "No hay cupos suficientes. Cupos disponibles: 25"
+}
+```
+
+### Ejemplo: inscripción duplicada
+
+**400 Bad Request**:
+```json
+{
+  "status": "error",
+  "message": "Ya tenés una inscripción activa para este evento"
+}
+```
+
+### Ejemplo: cancelar ticket ajeno
+
+**403 Forbidden**:
+```json
+{
+  "status": "error",
+  "message": "No podés cancelar un ticket que no te pertenece"
+}
+```
