@@ -22,6 +22,13 @@ export const crearTicket = async (eventId, userId, quantity) => {
     throw error
   }
 
+  const yaFinalizoPorFecha = new Date(evento.date) < new Date()
+  if (evento.status === 'finished' || evento.status === 'cancelled' || yaFinalizoPorFecha) {
+    const error = new Error('No es posible inscribirse a un evento que ya finalizó o fue cancelado')
+    error.status = 400
+    throw error
+  }
+
   if (!quantity || !Number.isInteger(quantity) || quantity <= 0) {
     const error = new Error('La cantidad debe ser un número entero mayor a 0')
     error.status = 400
