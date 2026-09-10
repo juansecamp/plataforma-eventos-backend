@@ -8,6 +8,7 @@ import usersRouter from './src/routes/users.routes.js'
 import sessionsRouter from './src/routes/sessions.routes.js'
 import ticketsRouter from './src/routes/tickets.routes.js'
 import eventsRouter from './src/routes/events.routes.js'
+import { errorHandler } from './src/middlewares/error.middleware.js'
 
 const app = express()
 
@@ -27,5 +28,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/sessions', sessionsRouter)
 app.use('/api/tickets', ticketsRouter)
 app.use('/api/events', eventsRouter)
+
+app.use(errorHandler)
 
 export default app
