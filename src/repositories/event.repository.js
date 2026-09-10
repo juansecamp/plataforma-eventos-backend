@@ -5,6 +5,10 @@ class EventRepository {
     return await eventDAO.findAll(filter, options)
   }
 
+  async findPublishedEvents(options = { skip: 0, limit: 10, sort: { createdAt: -1 } }) {
+    return await eventDAO.findAll({ status: 'published' }, options)
+  }
+
   async countEvents(filter) {
     return await eventDAO.countAll(filter)
   }

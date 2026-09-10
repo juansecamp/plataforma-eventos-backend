@@ -5,6 +5,10 @@ class EventDAO {
     return await Evento.find(filter).sort(sort).skip(skip).limit(limit)
   }
 
+  async findOne(filter) {
+    return await Evento.findOne(filter)
+  }
+
   async countAll(filter) {
     return await Evento.countDocuments(filter)
   }

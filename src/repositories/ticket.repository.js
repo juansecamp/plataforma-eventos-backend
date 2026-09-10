@@ -25,8 +25,16 @@ class TicketRepository {
     return await ticketDAO.countActiveByEvent(eventId)
   }
 
+  async countTickets(filter) {
+    return await ticketDAO.count(filter)
+  }
+
   async createTicket(ticketData) {
     return await ticketDAO.create(ticketData)
+  }
+
+  async updateTicket(id, updateData) {
+    return await ticketDAO.update(id, updateData)
   }
 
   async cancelTicket(id) {

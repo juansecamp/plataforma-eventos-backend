@@ -5,6 +5,10 @@ class TicketDAO {
     return await Ticket.find()
   }
 
+  async findOne(filter) {
+    return await Ticket.findOne(filter)
+  }
+
   async findById(id) {
     return await Ticket.findById(id)
   }
@@ -21,6 +25,10 @@ class TicketDAO {
     return await Ticket.findOne({ user: userId, event: eventId, status: { $ne: 'cancelled' } })
   }
 
+  async count(filter = {}) {
+    return await Ticket.countDocuments(filter)
+  }
+
   async countActiveByEvent(eventId) {
     const tickets = await Ticket.find({ event: eventId, status: { $ne: 'cancelled' } })
     return tickets.reduce((total, ticket) => total + ticket.quantity, 0)
@@ -29,6 +37,10 @@ class TicketDAO {
   async create(ticketData) {
     const nuevoTicket = new Ticket(ticketData)
     return await nuevoTicket.save()
+  }
+
+  async update(id, updateData) {
+    return await Ticket.findByIdAndUpdate(id, updateData, { returnDocument: 'after', runValidators: true })
   }
 
   async cancel(id) {
