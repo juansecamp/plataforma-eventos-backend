@@ -90,6 +90,30 @@ El servidor se inicia en el puerto configurado en `.env` (por defecto 8080), lev
 ├── package.json # Dependencias y scripts
 └── README.md # Documentación del proyecto
 
+## Arquitectura en capas
+
+El proyecto está organizado en capas con responsabilidades bien delimitadas, siguiendo el patrón DAO → Repository → Service → Controller, más una capa de DTOs para las respuestas.
+
+| Capa | Ubicación | Responsabilidad |
+|---|---|---|
+| **DAO** | `src/dao/` | Es la única capa que importa modelos de Mongoose directamente. Expone métodos de acceso a datos puros: `findById`, `findOne`, `create`, `update`, `count`, etc. No conoce reglas de negocio. |
+| **Repository** | `src/repositories/` | Usa el DAO correspondiente; nunca importa modelos directamente. Expone métodos orientados al dominio: `getUserByEmail`, `getEvents` (con filtros), `countActiveTicketsByEvent`, `cancelTicket`, etc. |
+| **Service** | `src/services/` | Consume repositories (nunca DAOs ni modelos). Concentra toda la lógica de negocio: validaciones de campos, control de cupos, estados de eventos y tickets, duplicados, permisos sobre recursos propios, envío de email. |
+| **Controller** | `src/controllers/` | Solo coordina request/response: extrae datos de `body`/`params`/`query`, llama al service correspondiente, pasa el resultado por el DTO, y responde. No calcula cupos, no valida estados ni resuelve reglas de negocio. No importa modelos de Mongoose. |
+| **DTO** | `src/dtos/` | Da forma a las respuestas de la API, filtrando siempre datos sensibles. Existen DTOs para usuario (`user.dto.js`), evento (`event.dto.js`) y ticket (`ticket.dto.js`). Ninguna respuesta expone `password`, ni siquiera hasheada — incluso si el documento viene con datos relacionados vía `populate` (por ejemplo, el evento populado dentro de un ticket), el DTO filtra también esos datos relacionados. |
+| **Middleware de errores** | `src/middlewares/error.middleware.js` | Middleware centralizado de Express. Los controllers no arman la respuesta de error manualmente: llaman a `next(error)`, y este middleware decide el código HTTP según `error.status` (400/401/403/404/409), o responde `500` genérico si el error no tiene un status definido, sin exponer detalles internos al cliente. |
+
+### Flujo de una petición
+
+Ruta → Middleware (auth/authorize) → Controller → Service → Repository → DAO → Modelo (Mongoose)
+↓
+DTO (da forma a la respuesta)
+↓
+Middleware de errores (si algo falla)
+
+
+Este orden garantiza que ninguna capa "salte" a otra que no le corresponde: un controller nunca valida reglas de negocio, un service nunca toca Mongoose directamente, y ninguna respuesta sale de la API sin pasar por un DTO que filtre información sensible.
+
 
 ## Endpoints Disponibles
 

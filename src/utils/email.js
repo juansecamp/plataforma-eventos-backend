@@ -26,7 +26,6 @@ export const enviarEmailConfirmacion = async ({ to, eventTitle, reservationCode,
       `
     })
 
-    console.log('Email de confirmación enviado:', info.messageId)
     return info
   } catch (error) {
     console.error('Error al enviar email de confirmación:', error.message)
