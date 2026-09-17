@@ -5,7 +5,7 @@ import {
   actualizarEvento,
   cambiarEstadoEvento
 } from '../services/events.service.js'
-import { toEventDTO, toEventListDTO } from '../dtos/event.dto.js'
+import { toEventDTO, toEventListDTO } from '../dto/event.dto.js'
 
 export const getEvents = async (req, res, next) => {
   try {

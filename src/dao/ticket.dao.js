@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import Ticket from '../models/ticket.model.js'
 
 class TicketDAO {
@@ -30,8 +31,12 @@ class TicketDAO {
   }
 
   async countActiveByEvent(eventId) {
-    const tickets = await Ticket.find({ event: eventId, status: { $ne: 'cancelled' } })
-    return tickets.reduce((total, ticket) => total + ticket.quantity, 0)
+    const resultado = await Ticket.aggregate([
+      { $match: { event: new mongoose.Types.ObjectId(eventId), status: { $ne: 'cancelled' } } },
+      { $group: { _id: null, totalOcupado: { $sum: '$quantity' } } }
+    ])
+
+    return resultado.length > 0 ? resultado[0].totalOcupado : 0
   }
 
   async create(ticketData) {

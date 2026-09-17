@@ -37,8 +37,8 @@ export const crearTicket = async (eventId, userId, quantity) => {
 
   const ticketExistente = await ticketRepository.getActiveTicketByUserAndEvent(userId, eventId)
   if (ticketExistente) {
-    const error = new Error('Ya tenés una inscripción activa para este evento')
-    error.status = 400
+    const error = new Error('Ya tenés una inscripción activa a este evento')
+    error.status = 409
     throw error
   }
 
@@ -47,7 +47,7 @@ export const crearTicket = async (eventId, userId, quantity) => {
 
   if (quantity > cupoDisponible) {
     const error = new Error(`No hay cupos suficientes. Cupos disponibles: ${cupoDisponible}`)
-    error.status = 400
+    error.status = 409
     throw error
   }
 
