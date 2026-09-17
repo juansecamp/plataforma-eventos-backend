@@ -1,6 +1,6 @@
 import passport from 'passport'
 import { generateToken } from '../utils/jwt.js'
-import { toUserDTO } from '../dtos/user.dto.js'
+import { toUserDTO } from '../dto/user.dto.js'
 
 const COOKIE_MAX_AGE = 3600000 // 1 hora en milisegundos
 

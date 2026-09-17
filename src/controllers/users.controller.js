@@ -1,5 +1,5 @@
 import { obtenerTodosLosUsuarios, guardarNuevoUsuario } from '../services/users.service.js'
-import { toUserDTO } from '../dtos/user.dto.js'
+import { toUserDTO } from '../dto/user.dto.js'
 
 export const getUsers = async (req, res, next) => {
   try {
